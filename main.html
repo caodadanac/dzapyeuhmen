@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Heart Firework Animation with Text</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      perspective: 1000px;
+      font-family: Arial, sans-serif;
+    }
+    
+    .container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .heart-particle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background-color: red;
+      border-radius: 50%;
+      transform-style: preserve-3d;
+      will-change: transform, opacity;
+    }
+    
+    .controls {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 10px;
+      border-radius: 8px;
+      color: white;
+    }
+    
+    button {
+      background: #ff4081;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    
+    button:hover {
+      background: #f50057;
+    }
+    
+    .text-3d-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transform-style: preserve-3d;
+      z-index: 10;
+      width: 100%;
+      text-align: center;
+    }
+    
+    .text-3d {
+      color: white;
+      font-size: 2.5rem;
+      font-weight: bold;
+      text-shadow: 0 0 10px rgba(255, 64, 129, 0.8);
+      transform-style: preserve-3d;
+      opacity: 0;
+      animation: textFadeIn 2s forwards;
+    }
+    
+    .char {
+      display: inline-block;
+      position: relative;
+      animation: textFloat 3s ease-in-out infinite;
+      animation-delay: calc(0.1s * var(--char-index));
+      text-shadow: 
+        0 0 10px #ff4081,
+        0 0 20px #ff4081,
+        0 0 30px #ff4081;
+    }
+    
+    @keyframes textFadeIn {
+      0% { opacity: 0; transform: translateZ(-100px); }
+      100% { opacity: 1; transform: translateZ(0); }
+    }
+    
+    @keyframes textFloat {
+      0%, 100% { transform: translateY(0) translateZ(0); }
+      50% { transform: translateY(-10px) translateZ(20px); }
+    }
+    
+    .glow-effect {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: radial-gradient(circle at center, rgba(255, 64, 129, 0.2) 0%, transparent 70%);
+      z-index: -1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="container">
+    <div class="text-3d-container" id="textContainer">
+      <div class="text-3d" id="text3d">Do Giap yeu Hong Men rat nhieu</div>
+    </div>
+    <div class="glow-effect"></div>
+  </div>
+  
+  <div class="controls">
+    <button id="launchBtn">Launch Firework</button>
+    <label>
+      <input type="checkbox" id="autoLaunch" checked> Auto Launch
+    </label>
+  </div>
+
+  <script>
+    // Configuration
+    const config = {
+      particleCount: 300,
+      explosionRadius: 150,
+      animationDuration: 3000,
+      colors: ['#ff0000', '#ff4081', '#ec407a', '#e91e63', '#d81b60', '#ff80ab', '#ff5252'],
+      autoLaunchInterval: 2000,
+      autoLaunch: true
+    };
+    
+    const container = document.getElementById('container');
+    const launchBtn = document.getElementById('launchBtn');
+    const autoLaunchCheckbox = document.getElementById('autoLaunch');
+    const text3d = document.getElementById('text3d');
+    let autoLaunchTimer = null;
+    
+    // Create 3D text effect
+    function setupText3D() {
+      const text = text3d.innerText;
+      text3d.innerHTML = '';
+      
+      // Create spans for each character
+      for (let i = 0; i < text.length; i++) {
+        const charSpan = document.createElement('span');
+        charSpan.className = 'char';
+        charSpan.style.setProperty('--char-index', i);
+        charSpan.textContent = text[i];
+        text3d.appendChild(charSpan);
+      }
+    }
+    
+    // Heart shape parametric equation
+    function heartShape(t, scale = 1) {
+      // Heart curve parametric equation
+      const x = 16 * Math.pow(Math.sin(t), 3);
+      const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+      // Add some depth variation for 3D effect
+      const z = 5 * Math.sin(2 * t);
+      
+      return {
+        x: x * scale,
+        y: -y * scale, // Flip the heart right-side up
+        z: z * scale
+      };
+    }
+    
+    function createParticle() {
+      const particle = document.createElement('div');
+      particle.className = 'heart-particle';
+      
+      // Randomize initial position slightly for better explosion effect
+      const initialX = (Math.random() - 0.5) * 20;
+      const initialY = (Math.random() - 0.5) * 20;
+      const initialZ = (Math.random() - 0.5) * 20;
+      
+      particle.style.transform = `translate3d(${initialX}px, ${initialY}px, ${initialZ}px)`;
+      
+      // Randomly select a color
+      const colorIndex = Math.floor(Math.random() * config.colors.length);
+      particle.style.backgroundColor = config.colors[colorIndex];
+      
+      // Randomize particle size for visual interest
+      const size = 5 + Math.random() * 8;
+      particle.style.width = `${size}px`;
+      particle.style.height = `${size}px`;
+      
+      container.appendChild(particle);
+      return particle;
+    }
+    
+    function animateParticle(particle, delay = 0) {
+      // Parameter t for heart shape equation
+      const t = Math.random() * 2 * Math.PI;
+      const position = heartShape(t, config.explosionRadius / 15);
+      
+      // Add some randomness to final position
+      const randomOffset = {
+        x: (Math.random() - 0.5) * 30,
+        y: (Math.random() - 0.5) * 30,
+        z: (Math.random() - 0.5) * 30
+      };
+      
+      const finalX = position.x + randomOffset.x;
+      const finalY = position.y + randomOffset.y;
+      const finalZ = position.z + randomOffset.z;
+      
+      // Slight delay for each particle for a more natural explosion
+      setTimeout(() => {
+        // Animate to heart position
+        particle.animate([
+          { 
+            transform: particle.style.transform,
+            opacity: 1
+          },
+          { 
+            transform: `translate3d(${finalX}px, ${finalY}px, ${finalZ}px)`,
+            opacity: 0
+          }
+        ], {
+          duration: config.animationDuration,
+          easing: 'cubic-bezier(0.1, 0.8, 0.2, 1)',
+          fill: 'forwards'
+        });
+      }, delay);
+      
+      // Remove the particle after animation completes
+      setTimeout(() => {
+        if (particle.parentNode) {
+          particle.parentNode.removeChild(particle);
+        }
+      }, config.animationDuration + delay + 100);
+    }
+    
+    function launchFirework() {
+      // Clear previous particles if needed
+      const particles = document.querySelectorAll('.heart-particle');
+      if (particles.length > 1000) {
+        particles.forEach((p, index) => {
+          if (index < 500) p.remove();
+        });
+      }
+      
+      // Create and animate particles
+      for (let i = 0; i < config.particleCount; i++) {
+        const particle = createParticle();
+        // Stagger the animation start time for a more natural explosion
+        const delay = Math.random() * 200;
+        animateParticle(particle, delay);
+      }
+      
+      // Add some smaller secondary explosions for visual interest
+      setTimeout(() => {
+        for (let i = 0; i < config.particleCount / 3; i++) {
+          const particle = createParticle();
+          // Smaller heart shape
+          particle.animate([
+            { transform: particle.style.transform, opacity: 1 },
+            { transform: `translate3d(
+                ${heartShape(Math.random() * 2 * Math.PI, config.explosionRadius / 25).x + (Math.random() - 0.5) * 100}px, 
+                ${heartShape(Math.random() * 2 * Math.PI, config.explosionRadius / 25).y - 50 + (Math.random() - 0.5) * 50}px, 
+                ${heartShape(Math.random() * 2 * Math.PI, config.explosionRadius / 25).z + (Math.random() - 0.5) * 50}px)`, 
+              opacity: 0 
+            }
+          ], {
+            duration: config.animationDuration * 0.7,
+            easing: 'cubic-bezier(0.1, 0.6, 0.2, 1)',
+            fill: 'forwards'
+          });
+          
+          setTimeout(() => {
+            if (particle.parentNode) {
+              particle.parentNode.removeChild(particle);
+            }
+          }, config.animationDuration * 0.7 + 100);
+        }
+      }, 300);
+      
+      // Add a pulse effect to the text when fireworks launch
+      const chars = document.querySelectorAll('.char');
+      chars.forEach(char => {
+        char.animate([
+          { textShadow: '0 0 10px #ff4081, 0 0 20px #ff4081, 0 0 30px #ff4081' },
+          { textShadow: '0 0 20px #ff4081, 0 0 40px #ff4081, 0 0 60px #ff4081' },
+          { textShadow: '0 0 10px #ff4081, 0 0 20px #ff4081, 0 0 30px #ff4081' }
+        ], {
+          duration: 1000,
+          easing: 'ease-in-out'
+        });
+      });
+    }
+    
+    function toggleAutoLaunch() {
+      config.autoLaunch = autoLaunchCheckbox.checked;
+      
+      if (config.autoLaunch) {
+        startAutoLaunch();
+      } else {
+        clearInterval(autoLaunchTimer);
+        autoLaunchTimer = null;
+      }
+    }
+    
+    function startAutoLaunch() {
+      if (autoLaunchTimer) {
+        clearInterval(autoLaunchTimer);
+      }
+      
+      // Immediately launch one
+      launchFirework();
+      
+      // Set up interval for continuous launching
+      autoLaunchTimer = setInterval(() => {
+        launchFirework();
+      }, config.autoLaunchInterval);
+    }
+    
+    // Event listeners
+    launchBtn.addEventListener('click', launchFirework);
+    autoLaunchCheckbox.addEventListener('change', toggleAutoLaunch);
+    
+    // Set up 3D text
+    setupText3D();
+    
+    // Start auto-launch if enabled
+    if (config.autoLaunch) {
+      startAutoLaunch();
+    }
+    
+    // Make the container rotate slightly for a 3D effect
+    function rotateContainer() {
+      let rotationX = 0;
+      let rotationY = 0;
+      let targetRotationX = 0;
+      let targetRotationY = 0;
+      
+      // Mouse movement affects rotation
+      document.addEventListener('mousemove', (e) => {
+        targetRotationX = (e.clientY / window.innerHeight - 0.5) * 15;
+        targetRotationY = (e.clientX / window.innerWidth - 0.5) * 15;
+      });
+      
+      function animate() {
+        // Smooth rotation transition
+        rotationX += (targetRotationX - rotationX) * 0.1;
+        rotationY += (targetRotationY - rotationY) * 0.1;
+        
+        container.style.transform = `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`;
+        requestAnimationFrame(animate);
+      }
+      
+      animate();
+    }
+    
+    rotateContainer();
+  </script>
+</body>
+</html>
